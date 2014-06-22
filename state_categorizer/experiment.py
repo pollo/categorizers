@@ -72,9 +72,6 @@ class ExperimentBase(object):
         print 'Building dataset...'
         X, y = self._build_dataset(auth_ids)
 
-        X = X[:10000]
-        y = y[:10000]
-
         #split dataset
         X_train, X_test, y_train, y_test = cross_validation.train_test_split(
             X, y, test_size=0.4, random_state=0)

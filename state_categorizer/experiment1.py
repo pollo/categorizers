@@ -28,5 +28,5 @@ class Experiment(ExperimentBase):
 
 if __name__ == '__main__':
     auth_ids = [32, 51]
-    Experiment().run(auth_ids, 'experiment1.clf')
+    Experiment().run(auth_ids, 'experiment1/clf.dump')
 
