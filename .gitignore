@@ -1,5 +1,8 @@
 local_db_settings.py
 
+*~
+*.png
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

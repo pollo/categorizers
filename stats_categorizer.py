@@ -7,17 +7,6 @@ import utm
 
 from local_db_settings import DB_SETTINGS
 
-
-def distance_3d(lon1, lat1, h1, lon2, lat2, h2):
-    ym1, xm1, _, _ = utm.from_latlon(lat1, lon1)
-    ym2, xm2, _, _ = utm.from_latlon(lat2, lon2)
-
-    arr1 = numpy.array((xm1, ym1, h1))
-    arr2 = numpy.array((xm2, ym2, h2))
-
-    dist = numpy.linalg.norm(arr1-arr2)
-    return dist
-
 def build_query(auth_user_id):
     return 'select * from skilo_sc.user_location_track  where auth_user_id = {0}' \
            ' order by ts'.format(auth_user_id)
@@ -34,7 +23,7 @@ def fetch_data(auth_user_id):
 
             data_all = [
                 dict(id=t[0], auth_user_id=t[1], ts=dt_to_ts(t[2]), type=t[3],
-                     x=t[4], y=t[5], z=t[6], m=t[7], track_id=t[8], sensor=t[9],
+                     lon=t[4], lat=t[5], z=t[6], m=t[7], track_id=t[8], sensor=t[9],
                      categorizers=t[12])
                 for t in cur.fetchall()
             ]
@@ -54,7 +43,6 @@ def run(auth_id):
 
     for i in range(len(buf)):
         try:
-            prev_item = buf[i-1]
             item = buf[i]
             suc_item = buf[i+1]
         except IndexError:
@@ -62,29 +50,38 @@ def run(auth_id):
 
         print item
 
-        #compute speed: previous and successive points are considered
-        distance_prev = distance_3d(
-            item['x'], item['y'], item['z'],
-            prev_item['x'], prev_item['y'], prev_item['z']
-        )
-        distance_suc = distance_3d(
-            item['x'], item['y'], item['z'],
-            suc_item['x'], suc_item['y'], suc_item['z']
-        )
+        #transform from utm to lat lon
+        x1, y1, _, _ = utm.from_latlon(item['lat'], item['lon'])
+        x2, y2, _, _ = utm.from_latlon(suc_item['lat'], suc_item['lon'])
 
-        time_delta = abs(suc_item['ts'] - prev_item['ts'])
+        #compute delta
+        p1 = numpy.array((x1, y1, item['z']))
+        p2 = numpy.array((x2, y2, suc_item['z']))
+        delta_p = p2 - p1
+        delta_t = suc_item['ts'] - item['ts']
 
-        speed = (distance_prev+distance_suc) / time_delta
+        #compute velocity
+        velocity = delta_p / delta_t
+
+        #compute acceleration
+        acceleration = velocity / delta_t
 
         if not buf[i]['categorizers']:
             buf[i]['categorizers'] = {}
 
-        buf[i]['categorizers']['speed'] = str(speed)
+        buf[i]['categorizers']['vel'] = str(numpy.linalg.norm(velocity))
+        buf[i]['categorizers']['velx'] = str(velocity[0])
+        buf[i]['categorizers']['vely'] = str(velocity[1])
+        buf[i]['categorizers']['velz'] = str(velocity[2])
+
+        buf[i]['categorizers']['acc'] = str(numpy.linalg.norm(acceleration))
+        buf[i]['categorizers']['accx'] = str(acceleration[0])
+        buf[i]['categorizers']['accy'] = str(acceleration[1])
+        buf[i]['categorizers']['accz'] = str(acceleration[2])
 
     store_data(buf)
 
-
 if __name__ == '__main__':
-    auth_id = 32
-    #auth_id = 51
-    run(auth_id)
+    auth_ids = [51, 32]
+    for auth_id in auth_ids:
+        run(auth_id)
