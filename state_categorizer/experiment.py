@@ -2,7 +2,7 @@ from sklearn import cross_validation
 from sklearn.externals import joblib
 from sklearn import svm
 
-import time, utm
+import time, utm, itertools
 
 import psycopg2
 import psycopg2.extras
@@ -63,11 +63,61 @@ class ExperimentBase(object):
                     if Xi:
                         assert (len(Xi) ==
                                 self.WINDOW_SIZE*self.FEATURES_PER_POINT)
-                        X.append(Xi)
+                        X.append({'id' : points[i]['id'],
+                                  'features' : Xi})
                         y.append(yi)
         return X, y
 
-    def run(self, auth_ids, dump_filename):
+    def _test_model(self, clf, X_test, y_test):
+        standing_samples = 0
+        skiing_samples = 0
+        ascending_samples = 0
+        correct_standing_samples = 0
+        correct_skiing_samples = 0
+        correct_ascending_samples = 0
+        errors = []
+        for X, y in itertools.izip(X_test, y_test):
+            if y==0:
+                standing_samples += 1
+                if clf.predict(X['features'])==y:
+                    correct_standing_samples += 1
+                else:
+                    errors.append({'id' : X['id'],
+                                   'class' : y})
+            if y==1:
+                skiing_samples += 1
+                if clf.predict(X['features'])==y:
+                    correct_skiing_samples += 1
+                else:
+                    errors.append({'id' : X['id'],
+                                   'class' : y})
+            if y==2:
+                ascending_samples += 1
+                if clf.predict(X['features'])==y:
+                    correct_ascending_samples += 1
+                                  else:
+                    errors.append({'id' : X['id'],
+                                   'class' : y})
+        print "Fraction of correctly classified standing: "
+        print float(correct_standing_sample)/standing_sample
+        print "Fraction of correctly classified skiing: "
+        print float(correct_skiing_sample)/skiing_sample
+        print "Fraction of correctly classified ascending: "
+        print float(correct_ascending_sample)/ascending_sample
+
+        return errors
+
+    def _store_to_db(self, errors, experiment_name):
+        with psycopg2.connect(**DB_SETTINGS) as conn:
+            psycopg2.extras.register_hstore(conn)
+            with conn.cursor() as cur:
+                for data in erros:
+                    cur.execute('UPDATE skilo_sc.user_location_track \
+                    SET errors = errors || (\'%s\'=>\'%s\') \
+                    WHERE id=%s',[experiment_name,data['class'],data['id']])
+
+
+    def run(self, auth_ids, experiment_name):
         #build dataset
         print 'Building dataset...'
         X, y = self._build_dataset(auth_ids)
@@ -78,9 +128,14 @@ class ExperimentBase(object):
 
         #train model
         print 'Training model...'
-        clf = svm.SVC(kernel='linear', C=1).fit(X_train, y_train)
-        joblib.dump(clf, dump_filename)
+        clf = svm.SVC(kernel='linear',C=1).fit([e['features'] for e in X_train],
+                                               y_train)
+        joblib.dump(clf, experiment_name+".clf")
 
         #test model
         print 'Test model...'
-        print clf.score(X_test, y_test)
+        _test_model(clf, X_test, y_test)
+
+        #write errors to db
+        print 'Storing errors on db'
+        _store_to_db(errors, experiment_name)
