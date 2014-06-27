@@ -2,7 +2,7 @@ from sklearn import cross_validation
 from sklearn.externals import joblib
 from sklearn import svm
 
-import time, utm, itertools
+import time, utm, itertools, os
 
 import psycopg2
 import psycopg2.extras
@@ -34,10 +34,24 @@ def _fetch_sorted_user_data(auth_user_id):
             ]
     return data_all
 
+
+def _store_to_db(errors, experiment_name):
+    with psycopg2.connect(**DB_SETTINGS) as conn:
+        psycopg2.extras.register_hstore(conn)
+        with conn.cursor() as cur:
+            for data in errors:
+                cur.execute('UPDATE skilo_sc.user_location_track \
+                SET errors = errors || hstore(%s,%s) \
+                WHERE id=%s',[experiment_name,
+                              str(data['class']),
+                              data['id']])
+
 class ExperimentBase(object):
     __metaclass__ = ABCMeta
 
-    WINDOW_SIZE = 11
+    @abstractproperty
+    def WINDOW_SIZE(self):
+        return
 
     @abstractproperty
     def FEATURES_PER_POINT(self):
@@ -68,7 +82,7 @@ class ExperimentBase(object):
                         y.append(yi)
         return X, y
 
-    def _test_model(self, clf, X_test, y_test):
+    def _test_model(self, clf, X_test, y_test, log):
         standing_samples = 0
         skiing_samples = 0
         ascending_samples = 0
@@ -77,50 +91,57 @@ class ExperimentBase(object):
         correct_ascending_samples = 0
         errors = []
         for X, y in itertools.izip(X_test, y_test):
+            predicted_y = clf.predict(X['features'])[0]
             if y==0:
                 standing_samples += 1
-                if clf.predict(X['features'])==y:
+                if predicted_y==y:
                     correct_standing_samples += 1
                 else:
                     errors.append({'id' : X['id'],
-                                   'class' : y})
+                                   'class' : predicted_y})
             if y==1:
                 skiing_samples += 1
-                if clf.predict(X['features'])==y:
+                if predicted_y==y:
                     correct_skiing_samples += 1
                 else:
                     errors.append({'id' : X['id'],
-                                   'class' : y})
+                                   'class' : predicted_y})
             if y==2:
                 ascending_samples += 1
-                if clf.predict(X['features'])==y:
+                if predicted_y==y:
                     correct_ascending_samples += 1
-                                  else:
+                else:
                     errors.append({'id' : X['id'],
-                                   'class' : y})
-        print "Fraction of correctly classified standing: "
-        print float(correct_standing_sample)/standing_sample
-        print "Fraction of correctly classified skiing: "
-        print float(correct_skiing_sample)/skiing_sample
-        print "Fraction of correctly classified ascending: "
-        print float(correct_ascending_sample)/ascending_sample
+                                   'class' : predicted_y})
+        s =  "Fraction of correctly classified standing: \n"
+        s += str(float(correct_standing_samples)/standing_samples)+"\n"
+        s += "Fraction of correctly classified skiing: \n"
+        s += str(float(correct_skiing_samples)/skiing_samples)+"\n"
+        s += "Fraction of correctly classified ascending: \n"
+        s += str(float(correct_ascending_samples)/ascending_samples)+"\n"
+        print s
+        log.write(s)
 
         return errors
 
-    def _store_to_db(self, errors, experiment_name):
-        with psycopg2.connect(**DB_SETTINGS) as conn:
-            psycopg2.extras.register_hstore(conn)
-            with conn.cursor() as cur:
-                for data in erros:
-                    cur.execute('UPDATE skilo_sc.user_location_track \
-                    SET errors = errors || (\'%s\'=>\'%s\') \
-                    WHERE id=%s',[experiment_name,data['class'],data['id']])
+    def run(self, auth_ids, experiment_name, subsampling=1.0):
+        print 'Running experiment '+experiment_name
+        #open log
+        log = open(experiment_name+".log","w")
+        try:
+            os.makedirs(experiment_name)
+        except OSError:
+            pass
 
-
-    def run(self, auth_ids, experiment_name):
         #build dataset
         print 'Building dataset...'
         X, y = self._build_dataset(auth_ids)
+        assert len(X)==len(y)
+
+        #subsample
+        print 'Subsampling dataset, using '+str(subsampling)+' of the data'
+        X = X[:int(len(X)*subsampling)]
+        y = y[:int(len(y)*subsampling)]
 
         #split dataset
         X_train, X_test, y_train, y_test = cross_validation.train_test_split(
@@ -130,12 +151,15 @@ class ExperimentBase(object):
         print 'Training model...'
         clf = svm.SVC(kernel='linear',C=1).fit([e['features'] for e in X_train],
                                                y_train)
-        joblib.dump(clf, experiment_name+".clf")
+        joblib.dump(clf, experiment_name+"/clf.dump")
 
         #test model
         print 'Test model...'
-        _test_model(clf, X_test, y_test)
+        errors = self._test_model(clf, X_test, y_test, log)
 
         #write errors to db
         print 'Storing errors on db'
         _store_to_db(errors, experiment_name)
+
+        #close log
+        log.close()

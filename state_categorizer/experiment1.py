@@ -1,4 +1,6 @@
 from experiment import ExperimentBase
+from sys import argv
+import os.path
 
 """
 In this experiment the features extracted will be the 3 components and the module of velocity and accelleration of each point
@@ -8,6 +10,10 @@ class Experiment(ExperimentBase):
     @property
     def FEATURES_PER_POINT(self):
         return 8
+
+    @property
+    def WINDOW_SIZE(self):
+        return 11
 
     def _extract_features(self, points):
         features = []
@@ -28,5 +34,12 @@ class Experiment(ExperimentBase):
 
 if __name__ == '__main__':
     auth_ids = [32, 51]
-    Experiment().run(auth_ids, 'experiment1/clf.dump')
+    experiment_name = os.path.splitext(os.path.basename(argv[0]))[0]
+    try:
+        subsampling = float(argv[1])
+        experiment_name += "_s"+str(subsampling)
+    except (ValueError, IndexError) as e:
+        subsampling = 1.0
+    Experiment().run(auth_ids, experiment_name,
+                     subsampling)
 
