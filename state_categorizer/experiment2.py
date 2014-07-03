@@ -16,6 +16,10 @@ def _angle_between(a,b):
 
 class Experiment(ExperimentBase):
     @property
+    def KERNEL_TYPE(self):
+        return "linear"
+
+    @property
     def FEATURES_PER_SAMPLE(self):
         return (self.WINDOW_SIZE-1)*6
 

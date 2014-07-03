@@ -56,6 +56,10 @@ class ExperimentBase(object):
     def FEATURES_PER_SAMPLE(self):
         return
 
+    @abstractproperty
+    def KERNEL_TYPE(self):
+        return
+
     @abstractmethod
     def _extract_features(self, points):
         pass
@@ -167,8 +171,9 @@ class ExperimentBase(object):
 
         #train model
         print 'Training model...'
-        clf = svm.SVC(kernel='linear',C=1).fit([e['features'] for e in X_train],
-                                               y_train)
+        clf = svm.SVC(kernel=self.KERNEL_TYPE,C=1)
+        clf.fit([e['features'] for e in X_train],
+                y_train)
         joblib.dump(clf, experiment_name+"/clf.dump")
 
         #test model
