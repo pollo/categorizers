@@ -54,7 +54,7 @@ class ExperimentBase(object):
         return
 
     @abstractproperty
-    def FEATURES_PER_POINT(self):
+    def FEATURES_PER_SAMPLE(self):
         return
 
     @abstractmethod
@@ -76,7 +76,7 @@ class ExperimentBase(object):
                                                        i+self.WINDOW_SIZE/2+1])
                     if Xi:
                         assert (len(Xi) ==
-                                self.WINDOW_SIZE*self.FEATURES_PER_POINT)
+                                self.FEATURES_PER_SAMPLE)
                         X.append({'id' : points[i]['id'],
                                   'features' : Xi})
                         y.append(yi)

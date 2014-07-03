@@ -8,8 +8,8 @@ In this experiment the features extracted will be the 3 components and the modul
 
 class Experiment(ExperimentBase):
     @property
-    def FEATURES_PER_POINT(self):
-        return 8
+    def FEATURES_PER_SAMPLE(self):
+        return self.WINDOWS_SIZE*8
 
     @property
     def WINDOW_SIZE(self):
