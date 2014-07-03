@@ -1,5 +1,6 @@
 from sklearn import cross_validation, metrics, svm
 from sklearn.externals import joblib
+from sklearn.preprocessing import StandardScaler
 
 import time, utm, itertools, os
 
@@ -164,6 +165,13 @@ class ExperimentBase(object):
         print 'Subsampling dataset, using '+str(subsampling)+' of the data'
         X = X[:int(len(X)*subsampling)]
         y = y[:int(len(y)*subsampling)]
+
+        #scale data
+        print 'Scale data...'
+        scaler = StandardScaler()
+        scaler.fit([e['features'] for e in X])
+        X = [{'id':e['id'],
+              'features':scaler.transform(e['features'])} for e in X]
 
         #split dataset
         X_train, X_test, y_train, y_test = cross_validation.train_test_split(
