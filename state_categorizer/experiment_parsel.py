@@ -110,15 +110,13 @@ class ExperimentParamsSelectionBase(object):
         X = X[:int(len(X)*subsampling)]
         y = y[:int(len(y)*subsampling)]
 
+        #keep only features
+        X = [e['features'] for e in X]
+
         #scale data
         print 'Scale data...'
         scaler = StandardScaler()
-        scaler.fit([e['features'] for e in X])
-        X = [{'id':e['id'],
-              'features':scaler.transform(e['features'])} for e in X]
-
-        #keep only features
-        X = [e['features'] for e in X]
+        X = scaler.fit_transform(X)
 
         #select parameters
         C_range = 10.0 ** np.arange(-2, 9)
