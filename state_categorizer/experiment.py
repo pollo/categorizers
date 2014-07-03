@@ -1,6 +1,5 @@
-from sklearn import cross_validation
+from sklearn import cross_validation, metrics, svm
 from sklearn.externals import joblib
-from sklearn import svm
 
 import time, utm, itertools, os
 
@@ -82,7 +81,26 @@ class ExperimentBase(object):
                         y.append(yi)
         return X, y
 
-    def _test_model(self, clf, X_test, y_test, log):
+    def _test_model(self, clf, X_train, X_test, y_train, y_test, log):
+        #compute training score
+        training_score = clf.score([e['features'] for e in X_train],
+                                   y_train)
+        #compute validation score
+        validation_score = clf.score([e['features'] for e in X_test],
+                                     y_test)
+        #compute confusion matrix
+        y_pred = clf.predict([e['features'] for e in X_test])
+        confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
+        s =  "Training score: \n"
+        s += str(training_score)+"\n"
+        s += "Validation score\n"
+        s += str(validation_score)+"\n"
+        s += "Confusion matrix\n"
+        s += str(confusion_matrix)+"\n"
+        print s
+        log.write(s)
+
+    def _find_errors(self, clf, X_test, y_test, log):
         standing_samples = 0
         skiing_samples = 0
         ascending_samples = 0
@@ -155,7 +173,11 @@ class ExperimentBase(object):
 
         #test model
         print 'Test model...'
-        errors = self._test_model(clf, X_test, y_test, log)
+        self._test_model(clf, X_train, X_test, y_train, y_test, log)
+
+        #find errors
+        print 'Find errors...'
+        errors = self._find_errors(clf, X_test, y_test, log)
 
         #write errors to db
         print 'Storing errors on db'
