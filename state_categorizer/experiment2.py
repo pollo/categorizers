@@ -27,15 +27,22 @@ class Experiment(ExperimentBase):
         features = []
         for i in range(len(points)-1):
             try:
-                print points[i]['categorizers']['vely']
-                vel_xy = np.array(float(points[i]['categorizers']['velx']),
-                                  float(points[i]['categorizers']['vely']))
-                acc_xy = np.array(float(points[i]['categorizers']['accx']),
-                                  float(points[i]['categorizers']['accy']))
-                next_vel_xy=np.array(float(points[i+1]['categorizers']['velx']),
-                                     float(points[i+1]['categorizers']['vely']))
-                next_acc_xy=np.array(float(points[i+1]['categorizers']['accx']),
-                                     float(points[i+1]['categorizers']['accy']))
+                vel_xy = np.array(
+                  (float(points[i]['categorizers']['velx']),
+                   float(points[i]['categorizers']['vely']))
+                )
+                acc_xy = np.array(
+                  (float(points[i]['categorizers']['accx']),
+                   float(points[i]['categorizers']['accy']))
+                )
+                next_vel_xy = np.array(
+                  (float(points[i+1]['categorizers']['velx']),
+                   float(points[i+1]['categorizers']['vely']))
+                )
+                next_acc_xy = np.array(
+                  (float(points[i+1]['categorizers']['accx']),
+                   float(points[i+1]['categorizers']['accy']))
+                )
                 vel_angle = _angle_between(vel_xy,
                                            next_vel_xy)
                 acc_angle = _angle_between(acc_xy,
