@@ -2,6 +2,11 @@ from sklearn import cross_validation, metrics, svm
 from sklearn.externals import joblib
 from sklearn.preprocessing import StandardScaler
 
+from sklearn.cross_validation import StratifiedKFold
+from sklearn.grid_search import GridSearchCV
+
+import numpy as np
+
 import time, utm, itertools, os
 
 import psycopg2
@@ -46,10 +51,8 @@ def _store_to_db(errors, experiment_name):
                               str(data['class']),
                               data['id']])
 
-class ExperimentBase(object):
+class ExperimentParamsSelectionBase(object):
     __metaclass__ = ABCMeta
-
-    scale = False
 
     @abstractproperty
     def WINDOW_SIZE(self):
@@ -88,67 +91,6 @@ class ExperimentBase(object):
                         y.append(yi)
         return X, y
 
-    def _test_model(self, clf, X_train, X_test, y_train, y_test, log):
-        #compute training score
-        training_score = clf.score([e['features'] for e in X_train],
-                                   y_train)
-        #compute validation score
-        validation_score = clf.score([e['features'] for e in X_test],
-                                     y_test)
-        #compute confusion matrix
-        y_pred = clf.predict([e['features'] for e in X_test])
-        confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
-        s =  "Training score: \n"
-        s += str(training_score)+"\n"
-        s += "Validation score\n"
-        s += str(validation_score)+"\n"
-        s += "Confusion matrix\n"
-        s += str(confusion_matrix)+"\n"
-        print s
-        log.write(s)
-
-    def _find_errors(self, clf, X_test, y_test, log):
-        standing_samples = 0
-        skiing_samples = 0
-        ascending_samples = 0
-        correct_standing_samples = 0
-        correct_skiing_samples = 0
-        correct_ascending_samples = 0
-        errors = []
-        for X, y in itertools.izip(X_test, y_test):
-            predicted_y = clf.predict(X['features'])[0]
-            if y==0:
-                standing_samples += 1
-                if predicted_y==y:
-                    correct_standing_samples += 1
-                else:
-                    errors.append({'id' : X['id'],
-                                   'class' : predicted_y})
-            if y==1:
-                skiing_samples += 1
-                if predicted_y==y:
-                    correct_skiing_samples += 1
-                else:
-                    errors.append({'id' : X['id'],
-                                   'class' : predicted_y})
-            if y==2:
-                ascending_samples += 1
-                if predicted_y==y:
-                    correct_ascending_samples += 1
-                else:
-                    errors.append({'id' : X['id'],
-                                   'class' : predicted_y})
-        s =  "Fraction of correctly classified standing: \n"
-        s += str(float(correct_standing_samples)/standing_samples)+"\n"
-        s += "Fraction of correctly classified skiing: \n"
-        s += str(float(correct_skiing_samples)/skiing_samples)+"\n"
-        s += "Fraction of correctly classified ascending: \n"
-        s += str(float(correct_ascending_samples)/ascending_samples)+"\n"
-        print s
-        log.write(s)
-
-        return errors
-
     def run(self, auth_ids, experiment_name, subsampling=1.0):
         print 'Running experiment '+experiment_name
         #open log
@@ -169,35 +111,26 @@ class ExperimentBase(object):
         y = y[:int(len(y)*subsampling)]
 
         #scale data
-        if (self.scale):
-            print 'Scale data...'
-            scaler = StandardScaler()
-            scaler.fit([e['features'] for e in X])
-            X = [{'id':e['id'],
-                  'features':scaler.transform(e['features'])} for e in X]
+        print 'Scale data...'
+        scaler = StandardScaler()
+        scaler.fit([e['features'] for e in X])
+        X = [{'id':e['id'],
+              'features':scaler.transform(e['features'])} for e in X]
 
-        #split dataset
-        X_train, X_test, y_train, y_test = cross_validation.train_test_split(
-            X, y, test_size=0.4, random_state=0)
+        #keep only features
+        X = [e['features'] for e in X]
 
-        #train model
-        print 'Training model...'
-        clf = svm.SVC(kernel=self.KERNEL_TYPE,C=1)
-        clf.fit([e['features'] for e in X_train],
-                y_train)
-        joblib.dump(clf, experiment_name+"/clf.dump")
+        #select parameters
+        C_range = 10.0 ** np.arange(-2, 9)
+        gamma_range = 10.0 ** np.arange(-5, 4)
+        param_grid = dict(gamma=gamma_range, C=C_range)
+        cv = StratifiedKFold(y=y, n_folds=3)
+        grid = GridSearchCV(svm.SVC(), param_grid=param_grid, cv=cv)
+        grid.fit(X, y)
 
-        #test model
-        print 'Test model...'
-        self._test_model(clf, X_train, X_test, y_train, y_test, log)
-
-        #find errors
-        print 'Find errors...'
-        errors = self._find_errors(clf, X_test, y_test, log)
-
-        #write errors to db
-        print 'Storing errors on db'
-        _store_to_db(errors, experiment_name)
+        s = "The best classifier is: "+str(grid.best_estimator_)
+        print s
+        log.write(s)
 
         #close log
         log.close()
