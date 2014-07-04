@@ -5,31 +5,10 @@ import sys
 import time
 import utm
 
+from state_categorizer.experiment4 import Experiment
 from sklearn.externals import joblib
 
 from local_db_settings import DB_SETTINGS
-
-WINDOW_SIZE = 11
-
-def _extract_features(points):
-    features = []
-    for i,point in enumerate(points):
-        try:
-            features.append(float(point['categorizers']['vel']))
-            features.append(float(point['categorizers']['velx']))
-            features.append(float(point['categorizers']['vely']))
-            features.append(float(point['categorizers']['velz']))
-            features.append(float(point['categorizers']['acc']))
-            features.append(float(point['categorizers']['accx']))
-            features.append(float(point['categorizers']['accy']))
-            features.append(float(point['categorizers']['accz']))
-            if i<len(points)/2:
-                features.append(int(point['categorizers']['ml_state']))
-        except KeyError as e:
-            print point['id']
-            print e
-            return []
-    return features
 
 def build_query(auth_user_id):
     return 'select * from skilo_sc.user_location_track  where auth_user_id = {0}' \
@@ -68,24 +47,30 @@ def run(auth_id):
     #load classifier
     clf = joblib.load("state_categorizer/experiment4/clf.dump")
 
+    e = Experiment()
+
     for i in range(len(buf)):
         if not buf[i]['categorizers']:
             buf[i]['categorizers'] = {}
 
-        points = buf[i-WINDOW_SIZE/2:
-                     i+WINDOW_SIZE/2+1]
+        points = buf[i-e.WINDOW_SIZE/2:
+                     i+e.WINDOW_SIZE/2+1]
 
-        if len(points) < WINDOW_SIZE:
+        if len(points) < e.WINDOW_SIZE:
             state = 0
         else:
             #extract features
-            features = _extract_features(points)
+            features = e._extract_features(points)
 
             #classify
             if features:
                 state = clf.predict(features)[0]
             else:
                 state = 0
+
+        # add this for future selection of next points
+        # this should never be written to the database!
+        buf[i]['classification'] = str(state)
 
         buf[i]['categorizers']['ml_state'] = str(state)
 

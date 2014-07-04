@@ -186,9 +186,13 @@ class ExperimentBase(object):
 
         #train model
         print 'Training model...'
+        t0 = time.time()
         clf = svm.SVC(kernel=self.KERNEL_TYPE,C=1)
         clf.fit([e['features'] for e in X_train],
                 y_train)
+        t1 = time.time()
+        print 'Trained in '+str(t1-t0)+' seconds.'
+        log.write('Trained in '+str(t1-t0)+' seconds.')
         joblib.dump(clf, experiment_name+"/clf.dump")
 
         #test model
