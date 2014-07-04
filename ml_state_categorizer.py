@@ -5,10 +5,31 @@ import sys
 import time
 import utm
 
-from state_categorizer.experiment4 import Experiment
 from sklearn.externals import joblib
 
 from local_db_settings import DB_SETTINGS
+
+WINDOW_SIZE = 11
+
+def _extract_features(points):
+    features = []
+    for i,point in enumerate(points):
+        try:
+            features.append(float(point['categorizers']['vel']))
+            features.append(float(point['categorizers']['velx']))
+            features.append(float(point['categorizers']['vely']))
+            features.append(float(point['categorizers']['velz']))
+            features.append(float(point['categorizers']['acc']))
+            features.append(float(point['categorizers']['accx']))
+            features.append(float(point['categorizers']['accy']))
+            features.append(float(point['categorizers']['accz']))
+            if i<len(points)/2:
+                features.append(int(point['categorizers']['ml_state']))
+        except KeyError as e:
+            print point['id']
+            print e
+            return []
+    return features
 
 def build_query(auth_user_id):
     return 'select * from skilo_sc.user_location_track  where auth_user_id = {0}' \
@@ -51,28 +72,22 @@ def run(auth_id):
         if not buf[i]['categorizers']:
             buf[i]['categorizers'] = {}
 
-        points = buf[i-WINDOW/2:
-                     i+WINDOW/2+1]
-        print len(points)
-        if len(points) < WINDOW:
-            state = "standing"
-        else:
-            print item
+        points = buf[i-WINDOW_SIZE/2:
+                     i+WINDOW_SIZE/2+1]
 
+        if len(points) < WINDOW_SIZE:
+            state = 0
+        else:
             #extract features
-            features = new Experiment()._extract_features(points)
+            features = _extract_features(points)
 
             #classify
-            state_id = clf.predict(features)
+            if features:
+                state = clf.predict(features)[0]
+            else:
+                state = 0
 
-            if state_id==0:
-                state = "standing"
-            elif state_id==1:
-                state = "descending"
-            elif state_id==2:
-                state = "ascending"
-
-        buf[i]['categorizers']['ml_state'] = state
+        buf[i]['categorizers']['ml_state'] = str(state)
 
     store_data(buf)
 
