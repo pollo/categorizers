@@ -93,6 +93,6 @@ def run(auth_id):
 
 
 if __name__ == '__main__':
-    auth_id = 32
-    #auth_id = 51
-    run(auth_id)
+    auth_ids = [32, 51]
+    for auth_id in auth_ids:
+        run(auth_id)
