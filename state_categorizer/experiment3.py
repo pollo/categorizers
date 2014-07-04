@@ -8,6 +8,10 @@ In this experiment the features extracted will be the 3 components and the modul
 
 class Experiment(ExperimentBase):
     @property
+    def C(self):
+        return 1
+
+    @property
     def KERNEL_TYPE(self):
         return "rbf"
 

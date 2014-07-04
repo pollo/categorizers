@@ -52,6 +52,10 @@ class ExperimentBase(object):
     scale = False
 
     @abstractproperty
+    def C(self):
+        return
+
+    @abstractproperty
     def WINDOW_SIZE(self):
         return
 

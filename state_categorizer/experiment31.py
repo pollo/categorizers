@@ -3,17 +3,17 @@ from sys import argv
 import os.path
 
 """
-In this experiment the features extracted will be the 3 components and the module of velocity and accelleration of each point
+In this experiment the features extracted will be the 3 components and the module of velocity and accelleration of each point. The svm will be used with rbf kernel instead of linear.
 """
 
 class Experiment(ExperimentBase):
     @property
     def C(self):
-        return 1
+        return 10
 
     @property
     def KERNEL_TYPE(self):
-        return "linear"
+        return "rbf"
 
     @property
     def FEATURES_PER_SAMPLE(self):

@@ -8,6 +8,10 @@ In this experiment the features extracted will be the 3 components and the modul
 
 class Experiment(ExperimentBase):
     @property
+    def C(self):
+        return 10
+
+    @property
     def KERNEL_TYPE(self):
         return "poly"
 
