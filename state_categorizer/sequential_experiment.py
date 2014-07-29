@@ -1,7 +1,6 @@
 from sklearn import cross_validation, metrics, svm
 from sklearn.externals import joblib
 from sklearn.preprocessing import StandardScaler
-from sys import argv
 
 import time, utm, itertools, os
 
@@ -28,7 +27,7 @@ def _fetch_sorted_user_data(auth_user_id):
 
             data_all = [
                 dict(id=t[0], auth_user_id=t[1], ts=dt_to_ts(t[2]),
-                     type=t[3], x=t[4], y=t[5], z=t[6], m=t[7],
+                     type=t[3], lon=t[4], lat=t[5], z=t[6], m=t[7],
                      track_id=t[8], sensor=t[9], classification=t[11],
                      categorizers=t[12])
                 for t in cur.fetchall()
@@ -47,49 +46,32 @@ def _store_to_db(errors, experiment_name):
                               str(data['class']),
                               data['id']])
 
-class Classifier(object):
+class ExperimentBase(object):
+    __metaclass__ = ABCMeta
+
     scale = False
-    C = 1.0
-    WINDOW_SIZE = 11
-    FEATURES_PER_SAMPLE = WINDOW_SIZE*8+WINDOW_SIZE/2
 
-    def _extract_training_features(self, points):
-        features = []
-        for i,point in enumerate(points):
-            try:
-                features.append(float(point['categorizers']['vel']))
-                features.append(float(point['categorizers']['velx']))
-                features.append(float(point['categorizers']['vely']))
-                features.append(float(point['categorizers']['velz']))
-                features.append(float(point['categorizers']['acc']))
-                features.append(float(point['categorizers']['accx']))
-                features.append(float(point['categorizers']['accy']))
-                features.append(float(point['categorizers']['accz']))
-                if i<len(points)/2:
-                    features.append(int(point['classification']))
-            except KeyError as e:
-                print e
-                return []
-        return features
+    @abstractproperty
+    def C(self):
+        return
 
-    def _extract_test_features(self, points):
-        features = []
-        for i,point in enumerate(points):
-            try:
-                features.append(float(point['categorizers']['vel']))
-                features.append(float(point['categorizers']['velx']))
-                features.append(float(point['categorizers']['vely']))
-                features.append(float(point['categorizers']['velz']))
-                features.append(float(point['categorizers']['acc']))
-                features.append(float(point['categorizers']['accx']))
-                features.append(float(point['categorizers']['accy']))
-                features.append(float(point['categorizers']['accz']))
-            except KeyError as e:
-                print e
-                return []
-        return features
+    @abstractproperty
+    def WINDOW_SIZE(self):
+        return
 
-    def _build_training_dataset(self, auth_ids):
+    @abstractproperty
+    def FEATURES_PER_SAMPLE(self):
+        return
+
+    @abstractproperty
+    def KERNEL_TYPE(self):
+        return
+
+    @abstractmethod
+    def _extract_features(self, points):
+        pass
+
+    def _build_dataset(self, auth_ids):
         X = []
         y = []
         for auth_id in auth_ids:
@@ -100,8 +82,8 @@ class Classifier(object):
                 except TypeError:
                     continue
                 if (yi in [0,1,2]):
-                    Xi = self._extract_training_features(points[i-self.WINDOW_SIZE/2:
-                                                                i+self.WINDOW_SIZE/2+1])
+                    Xi = self._extract_features(points[i-self.WINDOW_SIZE/2:
+                                                       i+self.WINDOW_SIZE/2+1])
                     if Xi:
                         assert (len(Xi) ==
                                 self.FEATURES_PER_SAMPLE)
@@ -110,24 +92,24 @@ class Classifier(object):
                         y.append(yi)
         return X, y
 
-    def _build_test_dataset(self, auth_ids):
-        X = []
-        y = []
-        for auth_id in auth_ids:
-            points = _fetch_sorted_user_data(auth_id)
-            for i in range(self.WINDOW_SIZE/2, len(points)-self.WINDOW_SIZE/2):
-                try:
-                    yi = int(points[i]['classification'])
-                except TypeError:
-                    continue
-                if (yi in [0,1,2]):
-                    Xi = self._extract_test_features(points[i-self.WINDOW_SIZE/2:
-                                                            i+self.WINDOW_SIZE/2+1])
-                    if Xi:
-                        X.append({'id' : points[i]['id'],
-                                  'features' : Xi})
-                        y.append(yi)
-        return X, y
+    def _test_model(self, clf, X_train, X_test, y_train, y_test, log):
+        #compute training score
+        training_score = clf.score([e['features'] for e in X_train],
+                                   y_train)
+        #compute validation score
+        validation_score = clf.score([e['features'] for e in X_test],
+                                     y_test)
+        #compute confusion matrix
+        y_pred = clf.predict([e['features'] for e in X_test])
+        confusion_matrix = metrics.confusion_matrix(y_test, y_pred)
+        s =  "Training score: \n"
+        s += str(training_score)+"\n"
+        s += "Validation score\n"
+        s += str(validation_score)+"\n"
+        s += "Confusion matrix\n"
+        s += str(confusion_matrix)+"\n"
+        print s
+        log.write(s)
 
     def _find_errors(self, clf, X_test, y_test, log):
         standing_samples = 0
@@ -137,12 +119,8 @@ class Classifier(object):
         correct_skiing_samples = 0
         correct_ascending_samples = 0
         errors = []
-        prediction_history = [0] * (self.WINDOW_SIZE/2)
-        for i, (X, y) in enumerate(itertools.izip(X_test, y_test)):
-            X['features'] += prediction_history
+        for X, y in itertools.izip(X_test, y_test):
             predicted_y = clf.predict(X['features'])[0]
-            prediction_history.pop(0)
-            prediction_history.append(predicted_y)
             if y==0:
                 standing_samples += 1
                 if predicted_y==y:
@@ -184,27 +162,37 @@ class Classifier(object):
         except OSError:
             pass
 
-        #build training dataset
-        print 'Building training dataset...'
-        X_train, y_train = self._build_training_dataset([51,])
-        assert len(X_train)==len(y_train)
+        #build dataset
+        print 'Building dataset...'
+        X, y = self._build_dataset(auth_ids)
+        assert len(X)==len(y)
 
         #subsample
-        print 'Subsampling training dataset, using '+str(subsampling)+' of the data'
-        X_train = X_train[:int(len(X_train)*subsampling)]
-        y_train = y_train[:int(len(y_train)*subsampling)]
+        print 'Subsampling dataset, using '+str(subsampling)+' of the data'
+        X = X[:int(len(X)*subsampling)]
+        y = y[:int(len(y)*subsampling)]
 
         #scale data
         if (self.scale):
             print 'Scale data...'
             scaler = StandardScaler()
-            scaler.fit([e['features'] for e in X_train])
-            X_train = [{'id':e['id'],
-                        'features':scaler.transform(e['features'])} for e in X_train]
+            scaler.fit([e['features'] for e in X])
+            X = [{'id':e['id'],
+                  'features':scaler.transform(e['features'])} for e in X]
+
+        #split dataset
+        #X_train, X_test, y_train, y_test = cross_validation.train_test_split(
+        #    X, y, test_size=0.4, random_state=0)
+        train_size = 0.6
+        X_train = X[:int(len(X)*train_size)]
+        X_test = X[int(len(X)*train_size):]
+        y_train = y[:int(len(X)*train_size)]
+        y_test = y[int(len(X)*train_size):]
+
         #train model
         print 'Training model...'
         t0 = time.time()
-        clf = svm.SVC(kernel='linear',C=self.C)
+        clf = svm.SVC(kernel=self.KERNEL_TYPE,C=1)
         clf.fit([e['features'] for e in X_train],
                 y_train)
         t1 = time.time()
@@ -212,10 +200,9 @@ class Classifier(object):
         log.write('Trained in '+str(t1-t0)+' seconds.')
         joblib.dump(clf, experiment_name+"/clf.dump")
 
-        #build test dataset
-        print 'Building test dataset...'
-        X_test, y_test = self._build_test_dataset([51,])
-        assert len(X_test)==len(y_test)
+        #test model
+        print 'Test model...'
+        self._test_model(clf, X_train, X_test, y_train, y_test, log)
 
         #find errors
         print 'Find errors...'
@@ -227,15 +214,3 @@ class Classifier(object):
 
         #close log
         log.close()
-
-if __name__ == '__main__':
-    auth_ids = [32, 51]
-    experiment_name = os.path.splitext(os.path.basename(argv[0]))[0]
-    try:
-        subsampling = float(argv[1])
-        experiment_name += "_s"+str(subsampling)
-    except (ValueError, IndexError) as e:
-        subsampling = 1.0
-    Classifier().run(auth_ids, experiment_name,
-                     subsampling)
-
