@@ -29,7 +29,7 @@ class Experiment(ExperimentBase):
 
     @property
     def FEATURES_PER_SAMPLE(self):
-        return (self.WINDOW_SIZE-1)*12
+        return self.WINDOW_SIZE*8 + (self.WINDOW_SIZE-1)*12
 
     @property
     def WINDOW_SIZE(self):
@@ -44,32 +44,31 @@ class Experiment(ExperimentBase):
         central_vector = point2vector(points[self.WINDOW_SIZE/2])
 
         for i,point in enumerate(points):
-            if i != self.WINDOW_SIZE/2:
-                vector = point2vector(point)
+            try:
+                if i != self.WINDOW_SIZE/2:
+                    vector = point2vector(point)
 
-                delta_p = central_vector - vector
-                delta_t = central_time - point['ts']
+                    delta_p = central_vector - vector
+                    delta_t = central_time - point['ts']
 
-                velocity = delta_p / delta_t
-                acceleration = velocity / delta_t
+                    velocity = delta_p / delta_t
+                    acceleration = velocity / delta_t
 
-                features.append(np.linalg.norm(delta_p))
-                features.append(delta_p[0])
-                features.append(delta_p[1])
-                features.append(delta_p[2])
+                    features.append(np.linalg.norm(delta_p))
+                    features.append(delta_p[0])
+                    features.append(delta_p[1])
+                    features.append(delta_p[2])
 
-                features.append(np.linalg.norm(velocity))
-                features.append(velocity[0])
-                features.append(velocity[1])
-                features.append(velocity[2])
+                    features.append(np.linalg.norm(velocity))
+                    features.append(velocity[0])
+                    features.append(velocity[1])
+                    features.append(velocity[2])
 
-                features.append(np.linalg.norm(acceleration))
-                features.append(acceleration[0])
-                features.append(acceleration[1])
-                features.append(acceleration[2])
-                """
-                for point in points:
-                try:
+                    features.append(np.linalg.norm(acceleration))
+                    features.append(acceleration[0])
+                    features.append(acceleration[1])
+                    features.append(acceleration[2])
+
                 features.append(float(point['categorizers']['vel']))
                 features.append(float(point['categorizers']['velx']))
                 features.append(float(point['categorizers']['vely']))
@@ -81,7 +80,7 @@ class Experiment(ExperimentBase):
             except KeyError as e:
                 print e
                 return []
-                """
+
         return features
 
 if __name__ == '__main__':
