@@ -27,7 +27,7 @@ def _fetch_sorted_user_data(auth_user_id):
 
             data_all = [
                 dict(id=t[0], auth_user_id=t[1], ts=dt_to_ts(t[2]),
-                     type=t[3], x=t[4], y=t[5], z=t[6], m=t[7],
+                     type=t[3], lon=t[4], lat=t[5], z=t[6], m=t[7],
                      track_id=t[8], sensor=t[9], classification=t[11],
                      categorizers=t[12])
                 for t in cur.fetchall()
