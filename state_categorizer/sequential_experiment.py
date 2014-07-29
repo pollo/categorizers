@@ -92,6 +92,19 @@ class ExperimentBase(object):
                         y.append(yi)
         return X, y
 
+    def _recompute_test_features(self, clf, X_test, y_test):
+        prediction_history = [0] * 5
+        for features, cls in itertools.izip(X_test, y_test):
+            print features['features']
+            features['features'] = features['features'][:-(self.WINDOW_SIZE/2)]
+            features['features'] += prediction_history
+            print features['features']
+
+            predicted_y = int(clf.predict(features['features'])[0])
+
+            prediction_history.pop(0)
+            prediction_history.append(cls)
+
     def _test_model(self, clf, X_train, X_test, y_train, y_test, log):
         #compute training score
         training_score = clf.score([e['features'] for e in X_train],
@@ -199,6 +212,11 @@ class ExperimentBase(object):
         print 'Trained in '+str(t1-t0)+' seconds.'
         log.write('Trained in '+str(t1-t0)+' seconds.')
         joblib.dump(clf, experiment_name+"/clf.dump")
+
+        #update test date to override classification with
+        #trained classifier predictions
+        print 'Updating test data...'
+        self._recompute_test_features(clf, X_test, y_test)
 
         #test model
         print 'Test model...'

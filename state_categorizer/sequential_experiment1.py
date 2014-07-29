@@ -35,6 +35,11 @@ class Experiment(ExperimentBase):
                 features.append(float(point['categorizers']['accx']))
                 features.append(float(point['categorizers']['accy']))
                 features.append(float(point['categorizers']['accz']))
+            except KeyError as e:
+                print e
+                return []
+        for i,point in enumerate(points):
+            try:
                 if i<len(points)/2:
                     features.append(int(point['classification']))
             except KeyError as e:
